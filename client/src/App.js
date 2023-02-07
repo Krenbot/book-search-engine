@@ -4,7 +4,6 @@ import SearchBooks from './pages/SearchBooks';
 import SavedBooks from './pages/SavedBooks';
 import Navbar from './components/Navbar';
 import { ApolloClient, ApolloProvider, InMemoryCache } from '@apollo/client'
-import { setContext } from '@apollo/client/link/context'
 
 const client = new ApolloClient({
   uri: '/graphql',
