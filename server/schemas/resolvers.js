@@ -1,47 +1,63 @@
-const { gql } = require('apollo-server-express')
+const { AuthenticationError } = require('apollo-server-express')
+const { User } = require('../models')
+const { signToken } = require('../utils/auth')
 
-const typeDefs = gql`
-    type User {
-        _id: ID!
-        username: String!
-        email: String!
-        bookCount: Int 
-        savedBooks: [Book]
-    }
-    
-    type Book {
-        bookId: String!
-        authors: [String]
-        description: String
-        image: String
-        link: String
-        title: String
-    }
-    
-    type Auth {
-        token: ID!
-        user: User
-    }
-    
-    input BookInput {
-        bookId: String!
-        authors: [String]
-        description: String
-        image: String
-        link: String
-        title: String
-    }
-    
-    type Query {
-        me: User
-    }
-   
-    type Mutation {
-        login(email: String!, password: String!): Auth
-        addUser(username: String!, email: String!, password: String!): Auth
-        saveBook(input: BookInput): User
-        removeBook(bookId: String!): User
-    }
-`
+const resolvers = {
+    Query: {
+        me: async (parent, args, context) => {
+            if (context.user) {
+                return await User.findOne({ _id: context.user._id }).populate('savedBooks')
+            }
+        }
+    },
+    Mutation: {
+        login: async (parent, { email, password }, context, info) => {
+            const user = await User.findOne({ email })
 
-module.exports = typeDefs
+            if (!user) {
+                throw new AuthenticationError('No user found!')
+            }
+
+            const correctPw = await user.isCorrectPassword(password)
+
+            if (!correctPw) {
+                throw new AuthenticationError('Incorrect password!')
+            }
+
+            const token = signToken(user)
+
+            return { token, user }
+        },
+
+        addUser: async (parent, args, context, info) => {
+            const user = await User.create(args)
+            const token = signToken(user)
+
+            return { token, user }
+        },
+
+        saveBook: async (parent, { input }, context, info) => {
+            if (context.user) {
+                const updatedUser = await User.findByIdAndUpdate(
+                    { _id: context.user._id },
+                    { $addToSet: { savedBooks: input } },
+                    { new: true }
+                )
+                return updatedUser
+            }
+        },
+
+        removeBook: async (parent, { bookId }, context, info) => {
+            if (context.user) {
+                const updatedUser = await User.findByIdAndUpdate(
+                    { _id: context.user._id },
+                    { $pull: { savedBooks: bookId } },
+                    { new: true }
+                )
+                return updatedUser
+            }
+        }
+    }
+}
+
+module.exports = resolvers
